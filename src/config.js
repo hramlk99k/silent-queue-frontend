@@ -1,0 +1,1 @@
+export const API_URL = 'https://silent-queue-backend.onrender.com';
