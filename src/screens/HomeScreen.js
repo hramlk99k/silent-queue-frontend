@@ -3,19 +3,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+  Modal, Platform, ScrollView, StyleSheet, Text,
+  TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../config';
 
-const { width } = Dimensions.get('window');
-const GRID_SPACING = 18;
-const SQUARE_SIZE = (width - (GRID_SPACING * 3)) / 2;
+// --- ROBUST DIMENSION CALCULATIONS ---
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_SPACING = 16;
+
+// FIX: If window width is reported as 0 (common in iframes/web), fallback to 375.
+// This prevents the "Line" bug where cards had 0 width.
+const SAFE_WIDTH = SCREEN_WIDTH > 50 ? SCREEN_WIDTH : 375;
+const DESIGN_WIDTH = Platform.OS === 'web' ? Math.min(SAFE_WIDTH, 375) : SAFE_WIDTH;
+
+// Force a minimum size of 150px so cards never squash into lines
+const SQUARE_SIZE = Math.max((DESIGN_WIDTH - (GRID_SPACING * 3)) / 2, 150);
 const NAV_BLUE = '#007AFF'; 
 
 const Countdown = ({ initialMinutes }) => {
@@ -59,7 +63,7 @@ export default function HomeScreen() {
         data.forEach(b => { if (base[b.roomType]) base[b.roomType].status = 'reservedByMe'; });
       }
       setRoomStatuses(base);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Fetch Error:", e); }
   };
 
   useFocusEffect(useCallback(() => { fetchStatus(); }, []));
@@ -76,7 +80,7 @@ export default function HomeScreen() {
         body: JSON.stringify({ roomType: roomName, apartment: 'Apt 12B', durationMinutes: 30 }),
       });
       if (res.ok) { setActiveRoom(roomName); setModalVisible(true); fetchStatus(); }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Action Error:", e); }
   };
 
   const RoomCard = ({ name, isSquare = false }) => {
@@ -112,7 +116,7 @@ export default function HomeScreen() {
               </View>
               
               <View style={styles.footer}>
-                <View style={[styles.actionBtn, { backgroundColor: themeColor, shadowColor: themeColor }]}>
+                <View style={[styles.actionBtn, { backgroundColor: themeColor }]}>
                    <Text style={styles.btnText}>
                     {state === 'available' ? 'RESERVE' : state === 'occupied' ? 'BUSY' : 'VIEW'}
                    </Text>
@@ -126,118 +130,81 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <LinearGradient
-            colors={[NAV_BLUE, '#0055BB']}
-            style={styles.logoNeonFrame}
-          >
-            <View style={styles.logoInnerBlack}>
-              <Text style={styles.logoText}>Q</Text>
-            </View>
-          </LinearGradient>
-        </View>
-        <View style={styles.headerText}>
-          <Text style={styles.brandName}>SILENT-QUEUE</Text>
-          <Text style={styles.aptInfo}>Apt 12B • Premium Access</Text>
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollArea} showsVerticalScrollIndicator={false}>
-        <View style={styles.grid}>
-          <RoomCard name="Laundry" isSquare />
-          <RoomCard name="Sauna" isSquare />
-          <RoomCard name="Common Room" />
-        </View>
-      </ScrollView>
-
-      <Modal transparent visible={modalVisible} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalGlow, { borderColor: '#00FF66', shadowColor: '#00FF66' }]}>
-            <Text style={styles.modalTitle}>SUCCESS</Text>
-            <Text style={styles.modalText}>{activeRoom} Reserved.</Text>
-            <TouchableOpacity style={styles.confirmBtn} onPress={() => setModalVisible(false)}>
-              <Text style={styles.confirmText}>START</Text>
-            </TouchableOpacity>
+    <View style={styles.container}>
+      <View style={[styles.content, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <LinearGradient colors={[NAV_BLUE, '#0055BB']} style={styles.logoNeonFrame}>
+              <View style={styles.logoInnerBlack}>
+                <Text style={styles.logoText}>Q</Text>
+              </View>
+            </LinearGradient>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.brandName}>SILENT-QUEUE</Text>
+            <Text style={styles.aptInfo}>Apt 12B • Premium Access</Text>
           </View>
         </View>
-      </Modal>
+
+        <ScrollView contentContainerStyle={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          <View style={styles.grid}>
+            <RoomCard name="Laundry" isSquare />
+            <RoomCard name="Sauna" isSquare />
+            <RoomCard name="Common Room" />
+          </View>
+        </ScrollView>
+
+        <Modal transparent visible={modalVisible} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalGlow, { borderColor: '#00FF66', shadowColor: '#00FF66' }]}>
+              <Text style={styles.modalTitle}>SUCCESS</Text>
+              <Text style={styles.modalText}>{activeRoom} Reserved.</Text>
+              <TouchableOpacity style={styles.confirmBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.confirmText}>START</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
+  content: { flex: 1, alignSelf: 'center', width: '100%', maxWidth: 375 },
   header: { flexDirection: 'row', paddingHorizontal: 25, paddingVertical: 10, alignItems: 'center' },
-  
-  // LOGO FIX
-  logoContainer: {
-    padding: 12, // Space for the glow
-    margin: -12, // Offset so it doesn't move the logo position
-  },
+  logoContainer: { padding: 12, margin: -12 },
   logoNeonFrame: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    padding: 2, // Border thickness
-    justifyContent: 'center',
-    alignItems: 'center',
-    // NUCLEAR GLOW
-    shadowColor: NAV_BLUE,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 15,
-    elevation: 20,
+    width: 48, height: 48, borderRadius: 14, padding: 2,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: NAV_BLUE, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 15, elevation: 20,
   },
-  logoInnerBlack: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: '#000',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: '900',
-    textShadowColor: NAV_BLUE,
-    textShadowRadius: 10,
-  },
-  
+  logoInnerBlack: { flex: 1, width: '100%', backgroundColor: '#000', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  logoText: { color: '#fff', fontSize: 26, fontWeight: '900', textShadowColor: NAV_BLUE, textShadowRadius: 10 },
   headerText: { marginLeft: 15 },
   brandName: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 1 },
   aptInfo: { color: '#666', fontSize: 13, fontWeight: '700', marginTop: -2 },
-  
   scrollArea: { padding: GRID_SPACING },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  
   outerGlow: { marginBottom: 20, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 40, elevation: 30 },
   card: { borderRadius: 30, borderWidth: 1.5, overflow: 'hidden' }, 
-  squareHeight: { height: width * 0.72 },
+  squareHeight: { height: 220 }, 
   fullHeight: { height: 175 },
-  
   cardContent: { flex: 1, padding: 20, justifyContent: 'space-between' },
   roomTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
   roomSub: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: 'bold' },
-  
   centerSection: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  statusMain: { fontSize: 30, fontWeight: '900', textAlign: 'center' },
-  
+  statusMain: { fontSize: 22, fontWeight: '900', textAlign: 'center' },
   timerAlign: { alignItems: 'center' },
-  timerText: { color: '#FFD700', fontSize: 50, fontWeight: '900', textShadowColor: '#FFD700', textShadowRadius: 35 },
-  yellowSub: { color: '#FFD700', fontSize: 11, fontWeight: 'bold', marginTop: 12 },
-  
+  timerText: { color: '#FFD700', fontSize: 38, fontWeight: '900', textShadowColor: '#FFD700', textShadowRadius: 35 },
+  yellowSub: { color: '#FFD700', fontSize: 10, fontWeight: 'bold', marginTop: 12 },
   footer: { alignItems: 'flex-end' },
-  actionBtn: { 
-    paddingHorizontal: 22, paddingVertical: 10, borderRadius: 25, 
-    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 15, elevation: 15
-  },
+  actionBtn: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 25 },
   btnText: { color: '#000', fontWeight: '900', fontSize: 12 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
-  modalGlow: { width: '80%', padding: 40, backgroundColor: '#000', borderRadius: 40, borderWidth: 3, alignItems: 'center', shadowOpacity: 1, shadowRadius: 50 },
+  modalGlow: { width: '80%', padding: 40, backgroundColor: '#000', borderRadius: 40, borderWidth: 3, alignItems: 'center' },
   modalTitle: { color: '#00FF66', fontSize: 32, fontWeight: '900', marginBottom: 10 },
   modalText: { color: '#fff', textAlign: 'center', marginBottom: 35 },
   confirmBtn: { backgroundColor: '#00FF66', paddingHorizontal: 45, paddingVertical: 15, borderRadius: 20 },
